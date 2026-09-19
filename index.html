@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#6d2d38" />
+    <meta name="description" content="Help Mushak the mouse dash through a festive obstacle course and collect as many modaks as possible!" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>Mushak's Modak Dash</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+    <style>
+      /* ── Reset & Root ─────────────────────────────── */
+      :root {
+        color-scheme: dark;
+        --gold: #ffd76a;
+        --gold-deep: #f4a42e;
+        --gold-glow: rgba(255, 215, 106, 0.35);
+        --saffron: #ff9933;
+        --maroon: #351827;
+        --maroon-glass: rgba(48, 21, 41, 0.88);
+        --maroon-solid: rgba(48, 21, 41, 0.96);
+        --cream: #fff8df;
+        --pink-soft: #f5dbe0;
+        --red-error: #ffb6ad;
+        --green-ok: #a8e6a3;
+        --font: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        --radius: 18px;
+        --radius-sm: 12px;
+      }
+
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      html, body, #game-container {
+        width: 100%; width: 100vw;
+        height: 100%; height: 100dvh;
+        overflow: hidden;
+      }
+
+      body {
+        font-family: var(--font);
+        background: var(--maroon);
+        overscroll-behavior: none;
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      #game-container { position: fixed; inset: 0; }
+      canvas { display: block; touch-action: none; outline: 0; }
+
+      /* ── Overlay Layer ─────────────────────────────── */
+      #overlay-layer {
+        position: fixed; z-index: 10;
+        top: 50%; left: 50%;
+        width: 1066px; height: 600px;
+        transform: translate(-50%, -50%);
+        transform-origin: center center;
+        display: grid; place-items: center;
+        pointer-events: none;
+      }
+
+      /* ── Micro Loader ──────────────────────────────── */
+      #loader-overlay {
+        position: fixed; inset: 0; z-index: 100;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        background: linear-gradient(160deg, #2a0f1e 0%, #4a1832 50%, #351827 100%);
+        pointer-events: auto;
+        transition: opacity 0.5s ease, visibility 0.5s ease;
+      }
+      #loader-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+      #loader-icon {
+        width: 80px; height: 80px;
+        border-radius: 50%;
+        border: 4px solid rgba(255, 215, 106, 0.2);
+        border-top-color: var(--gold);
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 24px;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      #loader-text {
+        font-size: 1.25rem; font-weight: 700;
+        color: var(--gold);
+        letter-spacing: 0.02em;
+        margin-bottom: 16px;
+      }
+
+      #loader-bar-track {
+        width: min(80vw, 320px); height: 8px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4px; overflow: hidden;
+      }
+      #loader-bar-fill {
+        height: 100%; width: 0%;
+        background: linear-gradient(90deg, var(--saffron), var(--gold));
+        border-radius: 4px;
+        transition: width 0.15s ease-out;
+      }
+
+      /* ── Modals (shared) ───────────────────────────── */
+      .modal[hidden] { display: none !important; }
+
+      .modal {
+        width: min(90%, 290px);
+        padding: 20px 18px;
+        border: 1.5px solid rgba(255, 215, 106, 0.4);
+        border-radius: var(--radius);
+        background: var(--maroon-glass);
+        backdrop-filter: blur(20px) saturate(1.6);
+        -webkit-backdrop-filter: blur(20px) saturate(1.6);
+        box-shadow:
+          0 0 0 150vmax rgba(0, 0, 0, 0.5),
+          0 24px 80px rgba(0, 0, 0, 0.55),
+          0 0 40px var(--gold-glow),
+          inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        color: var(--cream);
+        pointer-events: auto;
+        text-align: center;
+        animation: modalIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+      @keyframes modalIn {
+        from { opacity: 0; transform: scale(0.9) translateY(16px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
+      }
+      
+      #game-over-modal {
+        width: min(90%, 280px);
+        padding: 20px 16px;
+      }
+
+      .modal-hero-img {
+        position: relative;
+        margin: -10px auto -10px auto;
+        width: 115px;
+        height: 115px;
+        display: grid;
+        place-items: center;
+      }
+      .modal-hero-img::before {
+        content: '';
+        position: absolute;
+        width: 85px; height: 85px;
+        background: radial-gradient(circle, rgba(255, 215, 106, 0.5) 0%, transparent 70%);
+        filter: blur(10px);
+        z-index: -1;
+      }
+      .modal-hero-img img {
+        width: 100%;
+        height: auto;
+        object-fit: contain;
+        filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.4));
+      }
+
+      .modal h1, .modal h2 {
+        color: var(--gold);
+        font-weight: 800;
+        margin-bottom: 4px;
+        line-height: 1.2;
+      }
+      .modal h1 { font-size: 1.4rem; }
+      .modal h2 { font-size: 1.25rem; }
+
+      .modal p {
+        color: var(--pink-soft);
+        line-height: 1.5;
+        font-size: 0.92rem;
+        margin-bottom: 8px;
+      }
+
+      .modal .subtitle {
+        font-size: 0.85rem;
+        color: rgba(245, 219, 224, 0.7);
+        margin-bottom: 16px;
+      }
+
+      /* ── Form Fields ───────────────────────────────── */
+      .field {
+        display: grid; gap: 5px;
+        margin: 12px 0; text-align: left;
+      }
+      .field label {
+        font-weight: 700; font-size: 0.88rem;
+        color: var(--gold);
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+      .field input, .field select {
+        width: 100%; min-height: 48px;
+        padding: 10px 14px;
+        border: 1.5px solid rgba(249, 200, 93, 0.5);
+        border-radius: var(--radius-sm);
+        background: rgba(255, 248, 232, 0.95);
+        color: var(--maroon);
+        font: inherit; font-size: 1rem; font-weight: 600;
+        transition: border-color 0.2s, box-shadow 0.2s;
+        appearance: none;
+        -webkit-appearance: none;
+      }
+      .field select {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23351827' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 14px center;
+        padding-right: 40px;
+        cursor: pointer;
+      }
+      .field input:focus, .field select:focus {
+        outline: none;
+        border-color: var(--gold);
+        box-shadow: 0 0 0 3px var(--gold-glow);
+      }
+
+      /* ── Buttons ────────────────────────────────────── */
+      .btn {
+        display: block; width: 100%;
+        min-height: 50px; margin-top: 10px;
+        border: 0; border-radius: 14px;
+        font: 800 1rem/1 var(--font);
+        cursor: pointer;
+        transition: transform 0.1s, box-shadow 0.1s;
+        letter-spacing: 0.02em;
+      }
+      .btn:active { transform: translateY(2px); }
+      .btn:disabled { cursor: wait; opacity: 0.55; }
+
+      .btn-primary {
+        background: linear-gradient(135deg, var(--gold-deep) 0%, var(--gold) 100%);
+        color: var(--maroon);
+        box-shadow: 0 4px 0 #a95520, 0 6px 20px rgba(244, 164, 46, 0.3);
+      }
+      .btn-primary:active { box-shadow: 0 2px 0 #a95520; }
+
+      .btn-secondary {
+        background: rgba(255, 255, 255, 0.1);
+        color: var(--cream);
+        border: 1.5px solid rgba(255, 215, 106, 0.3);
+        box-shadow: none;
+      }
+      .btn-secondary:hover { background: rgba(255, 255, 255, 0.15); }
+
+      .btn-ghost {
+        background: transparent;
+        color: var(--gold);
+        min-height: 40px; margin-top: 6px;
+        font-weight: 600; font-size: 0.88rem;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+
+      /* ── Status Messages ────────────────────────────── */
+      .status { min-height: 1.3em; margin: 10px 0 0; font-size: 0.85rem; }
+      .error { color: var(--red-error); }
+      .success { color: var(--green-ok); }
+
+      /* ── Welcome Back ──────────────────────────────── */
+      .welcome-avatar {
+        width: 64px; height: 64px;
+        margin: 0 auto 12px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--saffron), var(--gold));
+        display: grid; place-items: center;
+        font-size: 2rem;
+        box-shadow: 0 4px 20px rgba(255, 153, 51, 0.35);
+      }
+
+      .high-score-badge {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 6px 16px;
+        border-radius: 20px;
+        background: rgba(255, 215, 106, 0.12);
+        border: 1px solid rgba(255, 215, 106, 0.25);
+        color: var(--gold);
+        font-weight: 700; font-size: 0.9rem;
+        margin: 8px 0 4px;
+      }
+
+      /* ── Leaderboard Panel ─────────────────────────── */
+      #leaderboard-panel[hidden] { display: none !important; }
+      #leaderboard-panel {
+        position: fixed; inset: 0; z-index: 20;
+        display: grid; place-items: center;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        pointer-events: auto;
+        padding: max(16px, env(safe-area-inset-top))
+                 max(16px, env(safe-area-inset-right))
+                 max(16px, env(safe-area-inset-bottom))
+                 max(16px, env(safe-area-inset-left));
+        animation: fadeIn 0.25s ease;
+      }
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+      .leaderboard-card {
+        width: 480px;
+        max-height: 520px;
+        padding: 24px 20px;
+        border: 1.5px solid rgba(255, 215, 106, 0.4);
+        border-radius: var(--radius);
+        background: var(--maroon-solid);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6), 0 0 60px var(--gold-glow);
+        color: var(--cream);
+        overflow: hidden;
+        display: flex; flex-direction: column;
+        animation: modalIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+
+      .leaderboard-card h2 {
+        color: var(--gold); font-weight: 800;
+        font-size: 1.3rem; margin-bottom: 16px;
+        text-align: center;
+      }
+
+      .leaderboard-scroll {
+        flex: 1; overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        margin-bottom: 12px;
+      }
+
+      /* ── Sound Toggle ──────────────────────────────── */
+      #sound-toggle-btn {
+        position: absolute; bottom: 16px; right: 16px;
+        background: rgba(53, 24, 39, 0.7);
+        border: 2px solid rgba(255, 215, 106, 0.5);
+        font-size: 24px;
+        width: 48px; height: 48px;
+        border-radius: 50%; cursor: pointer;
+        z-index: 50; display: grid; place-items: center;
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        pointer-events: auto;
+      }
+
+      .lb-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0 4px;
+        font-size: 0.88rem;
+      }
+      .lb-table th {
+        text-align: left;
+        color: rgba(245, 219, 224, 0.6);
+        font-weight: 600; font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 4px 8px 8px;
+      }
+      .lb-table td {
+        padding: 10px 8px;
+        background: rgba(255, 255, 255, 0.04);
+      }
+      .lb-personal-row td {
+        background: rgba(255, 215, 106, 0.2) !important;
+        color: var(--gold) !important;
+      }
+      .lb-table tr td:first-child { border-radius: 8px 0 0 8px; }
+      .lb-table tr td:last-child  { border-radius: 0 8px 8px 0; }
+
+      .lb-table .rank { font-weight: 800; width: 36px; text-align: center; }
+      .lb-table .rank-1 { color: #ffd700; }
+      .lb-table .rank-2 { color: #c0c0c0; }
+      .lb-table .rank-3 { color: #cd7f32; }
+      .lb-table .player-name { font-weight: 700; color: var(--cream); }
+      .lb-table .campus { color: var(--pink-soft); font-size: 0.8rem; }
+      .lb-table .score { font-weight: 800; color: var(--gold); text-align: right; }
+
+      .lb-empty {
+        text-align: center; padding: 32px 16px;
+        color: var(--pink-soft); font-size: 0.9rem;
+      }
+      .lb-loading {
+        text-align: center; padding: 32px 16px;
+        color: var(--gold); font-size: 0.9rem;
+      }
+
+      /* ── Game Over Extras ───────────────────────────── */
+      .go-score {
+        font-size: 2rem; font-weight: 900;
+        color: var(--gold);
+        margin: 8px 0 2px;
+        text-shadow: 0 2px 12px rgba(255, 215, 106, 0.4);
+      }
+      .go-duration {
+        font-size: 0.88rem;
+        color: var(--pink-soft);
+        margin-bottom: 12px;
+      }
+      .go-divider {
+        height: 1px; margin: 10px 0;
+        background: linear-gradient(90deg, transparent, rgba(255, 215, 106, 0.3), transparent);
+      }
+
+      /* ── Main Menu Buttons ─────────────────────────── */
+      #main-menu-buttons {
+        position: fixed;
+        bottom: max(20px, env(safe-area-inset-bottom));
+        left: 50%; transform: translateX(-50%);
+        z-index: 9;
+        display: flex; gap: 10px;
+        pointer-events: none;
+      }
+      #main-menu-buttons[hidden] { display: none !important; }
+      #main-menu-buttons .menu-btn {
+        pointer-events: auto;
+        padding: 10px 20px;
+        border: 1.5px solid rgba(255, 215, 106, 0.4);
+        border-radius: 30px;
+        background: var(--maroon-glass);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        color: var(--gold);
+        font: 700 0.82rem var(--font);
+        cursor: pointer;
+        transition: transform 0.15s, background 0.15s;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+      #main-menu-buttons .menu-btn:active { transform: scale(0.95); }
+
+      /* ── Portrait Rotation Prompt (Mobile) ──────────── */
+      #rotate-prompt {
+        display: none;
+        position: fixed; inset: 0; z-index: 200;
+        flex-direction: column;
+        align-items: center; justify-content: center; gap: 20px;
+        background: linear-gradient(160deg, #2a0f1e 0%, #4a1832 50%, #351827 100%);
+        color: var(--cream);
+        text-align: center;
+        padding: 32px;
+      }
+      #rotate-prompt .rotate-icon {
+        font-size: 4rem;
+        animation: rotateHint 2s ease-in-out infinite;
+      }
+      #rotate-prompt h2 {
+        color: var(--gold); font-weight: 800;
+        font-size: 1.4rem; margin: 0;
+      }
+      #rotate-prompt p {
+        color: var(--pink-soft);
+        font-size: 0.95rem; line-height: 1.5;
+        max-width: 280px;
+      }
+      @keyframes rotateHint {
+        0%, 100% { transform: rotate(0deg); }
+        25% { transform: rotate(-15deg); }
+        75% { transform: rotate(90deg); }
+      }
+
+      @media screen and (max-width: 768px) and (orientation: portrait) {
+        #rotate-prompt { display: flex; }
+        #game-container, #overlay-layer, #main-menu-buttons { visibility: hidden; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ── Game Canvas Container ─────────────────────── -->
+    <div id="game-container" aria-label="Mushak's Modak Dash game"></div>
+
+    <!-- ── Micro Loader ──────────────────────────────── -->
+    <div id="loader-overlay" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+      <div id="loader-icon"></div>
+      <div id="loader-text">Frying Modaks... 0%</div>
+      <div id="loader-bar-track">
+        <div id="loader-bar-fill"></div>
+      </div>
+    </div>
+
+    <!-- ── Overlay Layer (Modals) ────────────────────── -->
+    <div id="overlay-layer">
+
+      <!-- Auth / Registration Modal -->
+      <form id="profile-modal" class="modal" hidden novalidate>
+        <div id="profile-register-view">
+          <h1>🍪 Join the Modak Dash!</h1>
+          <p>Pick a username, campus, and a 4-digit PIN to secure your score.</p>
+          <div class="field">
+            <label for="display-name">Username</label>
+            <input id="display-name" name="displayName" maxlength="20" autocomplete="nickname"
+                   placeholder="Choose a unique name" required />
+          </div>
+          <div class="field">
+            <label for="campus">Your NIAT Campus</label>
+            <select id="campus" name="campus" required>
+              <option value="" disabled selected>Select your campus</option>
+              <option value="NIAT Jaipur">NIAT Jaipur</option>
+              <option value="NIAT Delhi NCR">NIAT Delhi NCR</option>
+              <option value="NIAT Pune">NIAT Pune</option>
+              <option value="NIAT Hyderabad">NIAT Hyderabad</option>
+              <option value="NIAT Bengaluru">NIAT Bengaluru</option>
+              <option value="NIAT Mangalore">NIAT Mangalore</option>
+              <option value="NIAT Chennai">NIAT Chennai</option>
+              <option value="NIAT Vijayawada">NIAT Vijayawada</option>
+              <option value="NIAT Visakhapatnam">NIAT Visakhapatnam</option>
+              <option value="NIAT Kolhapur">NIAT Kolhapur</option>
+              <option value="NIAT Rajampet">NIAT Rajampet</option>
+              <option value="NIAT Bhopal">NIAT Bhopal</option>
+              <option value="NIAT Panipat">NIAT Panipat</option>
+              <option value="NIAT Mathura">NIAT Mathura</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="player-pin">4-Digit PIN (For Login)</label>
+            <input id="player-pin" type="text" pattern="\d{4}" maxlength="4" placeholder="e.g. 1234" required />
+          </div>
+          <p id="profile-error" class="status error" role="alert"></p>
+          <button type="submit" class="btn btn-primary">Let's Dash! 🏃</button>
+        </div>
+        <div id="profile-welcome-view" hidden>
+          <div class="modal-hero-img">
+            <img src="/mushak-namaste.png" alt="Namaste Mushak" />
+          </div>
+          <h1>Namaste!</h1>
+          <p id="welcome-name" style="font-size:1.1rem; font-weight:700; color:var(--cream);"></p>
+          <div class="high-score-badge" id="welcome-high-score" hidden>
+            🏆 <span id="welcome-high-score-val">—</span>
+          </div>
+          <p class="subtitle" id="welcome-subtitle">Ready for another dash?</p>
+          <button type="button" id="welcome-play-btn" class="btn btn-primary">Dash!</button>
+          <button type="button" id="welcome-leaderboard-btn" class="btn btn-secondary">🏆 Leaderboard</button>
+          <button type="button" id="welcome-edit-btn" class="btn btn-ghost">Switch Player</button>
+        </div>
+      </form>
+
+      <!-- Game Over Modal -->
+      <section id="game-over-modal" class="modal" hidden aria-live="polite">
+        <div class="modal-hero-img">
+          <img src="/mushak-dizzy.png" alt="Dizzy Mushak" />
+        </div>
+        <h2>Mushak tripped!😵‍💫</h2>
+        <div class="go-score" id="final-score">0</div>
+        <div class="go-duration" id="final-duration">0.0 seconds</div>
+        <div class="go-divider"></div>
+        <button id="submit-score" type="button" class="btn btn-primary">Submit Score 🏆</button>
+        <button id="restart-game" type="button" class="btn btn-secondary">Dash Again!</button>
+        <button id="gameover-leaderboard-btn" type="button" class="btn btn-ghost">View Leaderboard</button>
+        <p id="submission-status" class="status" role="status"></p>
+      </section>
+
+      <!-- ── Main Menu Buttons ─────────────────────────── -->
+      <div id="main-menu-buttons" hidden>
+        <button class="menu-btn" id="menu-leaderboard-btn">🏆 Leaderboard</button>
+      </div>
+
+      <!-- ── Live Leaderboard Panel ────────────────────── -->
+      <div id="leaderboard-panel" hidden>
+        <div class="leaderboard-card">
+          <h2>🏆 Global Leaderboard</h2>
+          <div class="leaderboard-scroll">
+            <div id="leaderboard-body" class="lb-loading">Loading scores...</div>
+          </div>
+          <div id="personal-rank-footer" style="display: none; margin-bottom: 8px;">
+            <table class="lb-table" style="margin: 0; width: 100%;">
+              <tbody>
+                <tr class="lb-row lb-personal-row">
+                  <td class="rank" id="pr-rank" style="width: 36px;"></td>
+                  <td class="player-name" id="pr-name"></td>
+                  <td class="campus" id="pr-campus"></td>
+                  <td class="score" id="pr-score"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <button type="button" id="leaderboard-close-btn" class="btn btn-secondary">Close</button>
+        </div>
+      </div>
+      
+      <!-- ── Sound Toggle ──────────────────────────────── -->
+      <button id="sound-toggle-btn" aria-label="Toggle Sound">🔊</button>
+    </div>
+
+    <!-- ── Portrait Rotation Prompt ─────────────────── -->
+    <div id="rotate-prompt">
+      <div class="rotate-icon">📱</div>
+      <h2>Rotate Your Device</h2>
+      <p>Mushak runs best in landscape mode!<br/>Please rotate your phone sideways to play.</p>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
